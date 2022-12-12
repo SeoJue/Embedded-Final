@@ -3,7 +3,6 @@
 #### Project name : 까먹 등? 꺼졌 등!
 #### Team name : LNI
 #### Project execution period : 2022.12.01~2022.12.15
-#### GIT LAB URL : [GIT LAB](https://github.com/SeoJue/Embedded-Final)
 -----------------------
 
 # 1. 개요
