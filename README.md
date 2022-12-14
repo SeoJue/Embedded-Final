@@ -5,6 +5,10 @@
 #### Project execution period : 2022.12.01~2022.12.15
 -----------------------
 
+# 0. 실행 영상
+https://www.youtube.com/watch?v=1WLg98-wP-c
+
+
 # 1. 개요
 
 ## 개발배경
