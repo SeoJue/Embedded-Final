@@ -51,12 +51,12 @@ iot 관련 기술과 스마트홈이 발전하고 있는 지금 관련 시스템
 
 # 4. 개발내용 
 ### \<하드웨어\>  
-
+![물리](https://user-images.githubusercontent.com/69377952/207568285-4fde78c9-0515-4c5e-9675-499637b579bd.jpg)
 
 
 ### \<공유 메모리\>  
 ``` C
-int shared[5] = {FALSE, TRUE, TRUE, TRUE, 0};
+int shared[6] = {FALSE, TRUE, TRUE, TRUE, 0, 50};
 ```
 > 쓰레드 간의 데이터 공유를 위해 전역 배열  
 각각의 인덱스가 저장하는 정보  
@@ -65,6 +65,7 @@ int shared[5] = {FALSE, TRUE, TRUE, TRUE, 0};
 2번: 욕실 내부 사람 탐지 기능 동작 여부  
 3번: 욕실 내부 습도 측정 기능 동작 여부  
 4번: 욕실 내부 습도 수치  
+5번: 욕실 적정 습도 수치 
 
 ### \<거리 감지 쓰레드\>
 ```C
@@ -79,11 +80,12 @@ void *threadMotion(){
         if(shared[2]){
             pthread_mutex_lock(&mutex);
             distance = detectMotion();
-            if(distance > maximum){
+            if (distance > maximum) {
                 delay(1500);
                 distance = detectMotion();
-                if(distance > maximum) shared[0] = FALSE;
+                if (distance > maximum) shared[0] = FALSE;
             }
+            else shared[0] = TRUE;
             pthread_mutex_unlock(&mutex);
             delay(1500);
         }
@@ -130,18 +132,16 @@ int detectMotion(){
 ```C
 void *threadHumidity(){
     int humidity;
-    int minimum = 150;
     while(1){
         if(shared[3]){
             pthread_mutex_lock(&mutex);
             humidity = detectHumidity();
-            if(humidity < minimum) shared[1] = FALSE;
+            if(humidity < shared[5]) shared[1] = FALSE;
             shared[4]=humidity<100?humidity:shared[4];
             pthread_mutex_unlock(&mutex);
             delay(3000);
         }
     }
-    
 }
 ```
 > 지속적으로 주변습도를 기록하고 습도가 적정한지 판단하는 쓰레드  
@@ -365,13 +365,15 @@ void connect()
     unsigned char op;
     char *menu;
     char *option;
+    char *option2;
 
     if ((fd_serial = serialOpen (UART2_DEV, BAUD_RATE)) < 0){ //UART2 포트 오픈
         printf("Unable to open serial device.\n");
     }
     
-    menu = "메뉴\n1.전등 절약모드 관리\n2.환풍기 절약모드 관리\n3.욕실 상태 확인\n";
+    menu = "메뉴\n1.전등 절약모드 관리\n2.환풍기 절약모드 관리\n3.습도 단계 조절\n4.욕실 상태 확인\n";
     option = "1. On 2.Off";
+    option2 = "적정습도 입력 (1~9단계):";
 
 
     printB(fd_serial, menu, strlen(menu));
@@ -393,9 +395,9 @@ void connect()
         else
             shared[2]=FALSE;
     }
-    else if(dat==2){         
+    else if(dat=='2'){         
         printB(fd_serial, option, strlen(option));
-            
+
         op = serialRead (fd_serial);
         flush(fd_serial);
             
@@ -404,13 +406,26 @@ void connect()
         else
             shared[3]=FALSE;
     }
+    else if(dat=='3'){ 
+        printB(fd_serial, option2, strlen(option2));
+        
+        op = serialRead(fd_serial);
+        op-= 48;
+        
+        shared[5] = op*10;
+    }
     else{
-        char* data = shared[0]?"ON":"OFF";
-        char* out = strcat("LED state:", data);
-        printB(fd_serial, out, strlen(out));
+        char l_data[40]; 
+        char h_data[40]; 
+        
+        char out[50] = "LED state:";
+        sprintf(l_data, "%s\n", shared[0]?"ON":"OFF");
+        strcat(out, l_data);
 
-        sprintf(data, "%d", shared[4]);
-        out = strcat("Humidity:", data);
+        strcat(out, "Humidity:");
+        sprintf(h_data, "%d%%", shared[4]);
+        strcat(out, h_data);
+
         printB(fd_serial, out, strlen(out));
     }
         
@@ -430,7 +445,7 @@ void connect()
 > 외부 데이터 감지와, 블루투스 통신을 위해 메인 쓰레드 외에 3개의 추가적 쓰레드 생성 
 
 ### \<쓰레드 간 통신\>
-`int shared[5] = {FALSE, TRUE, TRUE, TRUE, 0}`
+int shared[6] = {FALSE, TRUE, TRUE, TRUE, 0, 50};
 
 >전역 변수를 이용하여 쓰레드 간 데이터를 공유 
 
@@ -451,7 +466,7 @@ pthread_mutex_unlock(&mutex);
 ```C
 pthread_mutex_lock(&mutex);
 humidity = detectHumidity();
-if(humidity < minimum) shared[1] = FALSE;
+if(humidity < shared[5]) shared[1] = FALSE;
 shared[4]=humidity<100?humidity:shared[4];
 pthread_mutex_unlock(&mutex);
 ```
@@ -504,7 +519,47 @@ pthread_mutex_unlock(&mutex);
 
 
 # 7. 사용 설명서 
+![설명1](https://user-images.githubusercontent.com/69377952/207569535-1bfb1f3c-6245-4b7c-856e-1de70113d274.jpg)
 
+### \<시스템 버튼\>
+> 시스템 버튼은 다음과 같다.  
+> LED 버튼과 모터버튼을 누르면 해당 기기의 작동 상태가 ON-OFF로 전환된다.  
+> 제어 버튼을 누르면 블루투스가 연결된 핸드폰 어플로 시스템 설정이 가능하다.  
+
+![설명2](https://user-images.githubusercontent.com/69377952/207569581-00ab86b1-c386-41fa-8c28-b4ba8e075bf8.jpg)
+
+### \<기기 동작\>
+> 해당 버튼을 누를 경우 이미지와 같이 기기가 동작하며 별도의 시스템 설정을 하지 않았다면  
+> 전등관리와 환풍기관리가 모두 활성화된 상태이며 거리센서가 거리 내 물체를 탐지하지 못하면 LED가 자동으로 OFF 되고  
+> 동시에 내부 습도가 적정 습도 이하라면 모터도 자동으로 OFF 된다. (단 적정습도 이하라도 내부에 사람이 있으면 자동으로 OFF되지 않음)
+
+![설정1](https://user-images.githubusercontent.com/69377952/207571184-8e59b515-6af5-4b90-a40a-32d14164ce92.jpg)
+
+### \<설정 메뉴\>
+> 제어 버튼을 누르면 핸드폰 어플에는 위와 같은 문구가 출력된다.  
+> 1: LED의 자동관리 기능을 ON, OFF하는 옵션.  
+> 2: 모터의 자동관리 기능을 ON, OFF하는 옵션.  
+> 3: 모터가 꺼지는 욕실 내부 적정 습도를 설정하는 옵션.
+> 4: 현재 욕실 내부의 사람 여부와 습도 수치를 출력하는 옵션.
+
+![설정2](https://user-images.githubusercontent.com/69377952/207571240-929d6918-34fb-4be3-aae0-5b50dced5db0.jpg)
+
+### \<자동관리 옵션\>
+> LED와 모터의 자동관리 옵션을 선택하면 출력되는 문구이다.   
+> 1을 입력하면 관리 기능을 키고, 2를 입력하면 관리 기능을 끈다.  
+
+![설정3](https://user-images.githubusercontent.com/69377952/207571285-79adc272-5653-45ff-8d08-07424e20e534.jpg)
+
+### \<적정습도 설정 옵션\>
+> 습도 설정 옵션을 선택하면 출력되는 문구이다.  
+> 습도는 단계로 나타낼 수 있으며 1단계: 10% ~ 9단계: 90%로 설정 가능하다. 
+
+![설정4](https://user-images.githubusercontent.com/69377952/207571312-0010d9f1-0d86-48c0-be49-04ef785ebc05.jpg)
+
+### \<적정습도 설정 옵션\>
+> 시스템 정보를 선택하면 출력되는 문구이다.  
+> 내부 사람 여부와 습도 수치를 확인할 수 있으며  
+> 이미지에서는 사람이 없어 OUT, 최초 습도 측정이 되지 않아 0%로 출력하는 상태이다.
 
 
 # 8. 조건
